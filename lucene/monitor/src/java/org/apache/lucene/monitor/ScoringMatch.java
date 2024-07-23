@@ -17,9 +17,6 @@
 
 package org.apache.lucene.monitor;
 
-import java.io.IOException;
-import org.apache.lucene.search.Scorable;
-import org.apache.lucene.search.ScoreMode;
 import org.apache.lucene.search.similarities.BM25Similarity;
 import org.apache.lucene.search.similarities.Similarity;
 
@@ -29,20 +26,7 @@ public class ScoringMatch extends QueryMatch {
   public static final MatcherFactory<ScoringMatch> matchWithSimilarity(Similarity similarity) {
     return searcher -> {
       searcher.setSimilarity(similarity);
-      return new CollectingMatcher<ScoringMatch>(searcher, ScoreMode.COMPLETE) {
-        @Override
-        protected ScoringMatch doMatch(String queryId, int doc, Scorable scorer)
-            throws IOException {
-          float score = scorer.score();
-          if (score > 0) return new ScoringMatch(queryId, score);
-          return null;
-        }
-
-        @Override
-        public ScoringMatch resolve(ScoringMatch match1, ScoringMatch match2) {
-          return new ScoringMatch(match1.getQueryId(), match1.getScore() + match2.getScore());
-        }
-      };
+      return new ScoringCandidateMatcher(searcher);
     };
   }
 
@@ -51,7 +35,7 @@ public class ScoringMatch extends QueryMatch {
 
   private final float score;
 
-  private ScoringMatch(String queryId, float score) {
+  protected ScoringMatch(String queryId, float score) {
     super(queryId);
     this.score = score;
   }

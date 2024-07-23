@@ -18,8 +18,6 @@
 package org.apache.lucene.monitor;
 
 import java.util.Objects;
-import org.apache.lucene.search.Scorable;
-import org.apache.lucene.search.ScoreMode;
 
 /**
  * Represents a match for a specific query and document
@@ -34,19 +32,7 @@ public class QueryMatch {
 
   private final String queryId;
 
-  public static final MatcherFactory<QueryMatch> SIMPLE_MATCHER =
-      searcher ->
-          new CollectingMatcher<QueryMatch>(searcher, ScoreMode.COMPLETE_NO_SCORES) {
-            @Override
-            public QueryMatch resolve(QueryMatch match1, QueryMatch match2) {
-              return match1;
-            }
-
-            @Override
-            protected QueryMatch doMatch(String queryId, int doc, Scorable scorer) {
-              return new QueryMatch(queryId);
-            }
-          };
+  public static final MatcherFactory<QueryMatch> SIMPLE_MATCHER = SimpleCandidateMatcher::new;
 
   /**
    * Creates a new QueryMatch for a specific query and document
@@ -81,4 +67,5 @@ public class QueryMatch {
   public String toString() {
     return "Match(query=" + queryId + ")";
   }
+
 }
