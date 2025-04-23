@@ -118,8 +118,7 @@ public class TermFilteredPresearcher extends Presearcher {
 
               @Override
               protected boolean accept() {
-                return filterFields.contains(field.name) == false
-                    && termAcceptor.test(field.name, termAtt.getBytesRef());
+                return termAcceptor.test(field.name, termAtt.getBytesRef());
               }
             };
 

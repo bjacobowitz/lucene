@@ -76,14 +76,96 @@ public abstract class FieldFilterPresearcherComponentTestBase extends Presearche
     }
   }
 
-  public void testFieldFiltering() throws IOException {
-
+  public void testFieldFilteringInQuery() throws IOException {
     try (Monitor monitor = newMonitor()) {
       monitor.register(
-          new MonitorQuery("1", parse("test"), null, Collections.singletonMap("language", "en")),
-          new MonitorQuery("2", parse("test"), null, Collections.singletonMap("language", "de")),
-          new MonitorQuery("3", parse("wibble"), null, Collections.singletonMap("language", "en")),
-          new MonitorQuery("4", parse("*:*"), null, Collections.singletonMap("language", "de")));
+          new MonitorQuery(
+              "1",
+              parse("field:test language:en"),
+              null,
+              Collections.singletonMap("language", "en")),
+          new MonitorQuery(
+              "2",
+              parse("field:test language:de"),
+              null,
+              Collections.singletonMap("language", "de")),
+          new MonitorQuery(
+              "3",
+              parse("field:wibble language:en"),
+              null,
+              Collections.singletonMap("language", "en")),
+          new MonitorQuery(
+              "4", parse("language:de"), null, Collections.singletonMap("language", "de")));
+
+      Document deDoc = new Document();
+      deDoc.add(newTextField(TEXTFIELD, "das ist ein test", Field.Store.NO));
+      deDoc.add(newTextField("language", "de", Field.Store.NO));
+
+      MatchingQueries<QueryMatch> de = monitor.match(deDoc, QueryMatch.SIMPLE_MATCHER);
+      assertEquals(2, de.getMatchCount());
+      assertNotNull(de.matches("2"));
+      assertNotNull(de.matches("4"));
+      // Queries 2 and 4 have filter field (language) de, query 2 is decomposed into two
+      // (one for field:test and one for language:de)
+      assertEquals(3, de.getQueriesRun());
+    }
+  }
+
+  public void testFieldFilteringInQueryConjunction() throws IOException {
+    try (Monitor monitor = newMonitor()) {
+      monitor.register(
+          new MonitorQuery(
+              "1",
+              parse("+field:test +language:en"),
+              null,
+              Collections.singletonMap("language", "en")),
+          new MonitorQuery(
+              "2",
+              parse("+field:test +language:de"),
+              null,
+              Collections.singletonMap("language", "de")),
+          new MonitorQuery(
+              "3",
+              parse("+field:wibble +language:en"),
+              null,
+              Collections.singletonMap("language", "en")),
+          new MonitorQuery(
+              "4", parse("+language:de"), null, Collections.singletonMap("language", "de")));
+
+      Document deDoc = new Document();
+      deDoc.add(newTextField(TEXTFIELD, "das ist ein test", Field.Store.NO));
+      deDoc.add(newTextField("language", "de", Field.Store.NO));
+
+      MatchingQueries<QueryMatch> de = monitor.match(deDoc, QueryMatch.SIMPLE_MATCHER);
+      assertEquals(2, de.getMatchCount());
+      assertNotNull(de.matches("2"));
+      // Queries 2 and 4 have filter field (language) de
+      // query 2 decomposition can be optimized because fields have MUST
+      assertEquals(2, de.getQueriesRun());
+    }
+  }
+
+  public void testFieldFilteringInQueryNotFilterField() throws IOException {
+    try (Monitor monitor = newMonitor()) {
+      monitor.register(
+          new MonitorQuery(
+              "1",
+              parse("field:test -language:de"),
+              null,
+              Collections.singletonMap("language", "en")),
+          new MonitorQuery(
+              "2",
+              parse("field:test -language:en"),
+              null,
+              Collections.singletonMap("language", "de")),
+          // This query cannot match, since a document cannot have language en and not en
+          new MonitorQuery(
+              "3",
+              parse("field:test -language:en"),
+              null,
+              Collections.singletonMap("language", "en")),
+          new MonitorQuery(
+              "4", parse("language:de"), null, Collections.singletonMap("language", "de")));
 
       Document enDoc = new Document();
       enDoc.add(newTextField(TEXTFIELD, "this is a test", Field.Store.NO));
@@ -92,26 +174,9 @@ public abstract class FieldFilterPresearcherComponentTestBase extends Presearche
       MatchingQueries<QueryMatch> en = monitor.match(enDoc, QueryMatch.SIMPLE_MATCHER);
       assertEquals(1, en.getMatchCount());
       assertNotNull(en.matches("1"));
-      assertEquals(1, en.getQueriesRun());
-
-      Document deDoc = new Document();
-      deDoc.add(newTextField(TEXTFIELD, "das ist ein test", Field.Store.NO));
-      deDoc.add(newTextField("language", "de", Field.Store.NO));
-
-      MatchingQueries<QueryMatch> de = monitor.match(deDoc, QueryMatch.SIMPLE_MATCHER);
-      assertEquals(2, de.getMatchCount());
-      assertEquals(2, de.getQueriesRun());
-      assertNotNull(de.matches("2"));
-      assertNotNull(de.matches("4"));
-
-      Document bothDoc = new Document();
-      bothDoc.add(newTextField(TEXTFIELD, "this is ein test", Field.Store.NO));
-      bothDoc.add(newTextField("language", "en", Field.Store.NO));
-      bothDoc.add(newTextField("language", "de", Field.Store.NO));
-
-      MatchingQueries<QueryMatch> both = monitor.match(bothDoc, QueryMatch.SIMPLE_MATCHER);
-      assertEquals(3, both.getMatchCount());
-      assertEquals(3, both.getQueriesRun());
+      // Queries 1 and 3 have filter field (language) en,
+      // but query 3 has a conflicting value for language in the query itself, so it cannot match
+      assertEquals(2, en.getQueriesRun());
     }
   }
 
